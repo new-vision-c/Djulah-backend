@@ -15,11 +15,14 @@ import { protect } from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
 
-// Rate limiting for all auth routes
+// Rate limiting for all auth routes (internationalized via middleware)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 50,
-  message: { success: false, message: 'Too many requests. Try again later.' }
+  message: (req) => ({
+    success: false,
+    message: req.t ? req.t('auth.rate_limit') : 'Too many requests. Try again later.'
+  })
 });
 
 /**
@@ -40,17 +43,22 @@ const authLimiter = rateLimit({
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             required:
- *               - email
- *               - password
- *             properties:
- *               name: { type: string, example: "Jean Dupont" }
- *               email: { type: string, format: email, example: "jean@djulah.cm" }
- *               password: { type: string, format: password, minLength: 6, example: "myPass123" }
+ *             $ref: '#/components/schemas/RegisterInput'
  *     responses:
  *       201:
  *         description: Registration successful – check email for verification code
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 message: { type: string, example: 'Inscription réussie. Vérifiez vos emails.' }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     email: { type: string, example: 'client@djulah.cm' }
+ *                     name: { type: string, example: 'Alice N.' }
  *       400:
  *         description: Validation error (missing or invalid fields)
  *       409:
@@ -69,13 +77,7 @@ router.post('/register', authLimiter, register);
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             required:
- *               - email
- *               - code
- *             properties:
- *               email: { type: string, format: email, example: "jean@djulah.cm" }
- *               code: { type: string, example: "483920" }
+ *             $ref: '#/components/schemas/VerifyEmailInput'
  *     responses:
  *       200:
  *         description: Email verified – returns JWT token
@@ -84,9 +86,14 @@ router.post('/register', authLimiter, register);
  *             schema:
  *               type: object
  *               properties:
- *                 success: { type: boolean }
- *                 token: { type: string }
- *                 user: { type: object }
+ *                 success: { type: boolean, example: true }
+ *                 message: { type: string, example: 'Email vérifié avec succès.' }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     token: { type: string, example: 'eyJ...' }
+ *                     user:
+ *                       $ref: '#/components/schemas/ClientUser'
  *       400:
  *         description: Invalid or expired code
  */
@@ -103,13 +110,17 @@ router.post('/verify-email', authLimiter, verifyEmail);
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             required: [email]
- *             properties:
- *               email: { type: string, format: email, example: "jean@djulah.cm" }
+ *             $ref: '#/components/schemas/ForgotPasswordInput'
  *     responses:
  *       200:
  *         description: New code sent
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 message: { type: string, example: 'Code de vérification renvoyé.' }
  *       429:
  *         description: Too many resend requests
  */
@@ -126,16 +137,23 @@ router.post('/resend-verification', authLimiter, resendVerificationCode);
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             required:
- *               - email
- *               - password
- *             properties:
- *               email: { type: string, format: email }
- *               password: { type: string, format: password }
+ *             $ref: '#/components/schemas/LoginInput'
  *     responses:
  *       200:
  *         description: Login successful – returns JWT token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 message: { type: string, example: 'Connexion réussie.' }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     token: { type: string, example: 'eyJ...' }
+ *                     user:
+ *                       $ref: '#/components/schemas/ClientUser'
  *       401:
  *         description: Invalid credentials
  *       403:
@@ -154,13 +172,17 @@ router.post('/login', authLimiter, login);
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             required: [email]
- *             properties:
- *               email: { type: string, format: email, example: "jean@djulah.cm" }
+ *             $ref: '#/components/schemas/ForgotPasswordInput'
  *     responses:
  *       200:
  *         description: Reset code sent to email
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 message: { type: string, example: 'Code de réinitialisation envoyé.' }
  *       404:
  *         description: No verified account found
  */
@@ -177,18 +199,21 @@ router.post('/forgot-password', authLimiter, forgotPassword);
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             required:
- *               - email
- *               - code
- *               - password
- *             properties:
- *               email: { type: string, format: email }
- *               code: { type: string, example: "729104" }
- *               password: { type: string, format: password, minLength: 6 }
+ *             $ref: '#/components/schemas/ResetPasswordInput'
  *     responses:
  *       200:
  *         description: Password reset successful – returns new JWT token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 message: { type: string, example: 'Mot de passe réinitialisé.' }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     token: { type: string, example: 'eyJ...' }
  *       400:
  *         description: Invalid or expired code
  */
@@ -205,6 +230,14 @@ router.post('/reset-password', authLimiter, resetPassword);
  *     responses:
  *       200:
  *         description: User profile retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   $ref: '#/components/schemas/ClientUser'
  *       401:
  *         description: Unauthorized - no token provided
  */
@@ -224,29 +257,7 @@ router.get('/profile', protect, getProfile);
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             required:
- *               - currentPassword
- *               - newPassword
- *               - confirmNewPassword
- *             properties:
- *               currentPassword:
- *                 type: string
- *                 format: password
- *                 description: Your current password
- *                 example: "oldPass123"
- *               newPassword:
- *                 type: string
- *                 format: password
- *                 minLength: 6
- *                 description: Your new password (must be different from current)
- *                 example: "newPass456"
- *               confirmNewPassword:
- *                 type: string
- *                 format: password
- *                 minLength: 6
- *                 description: Confirm your new password
- *                 example: "newPass456"
+ *             $ref: '#/components/schemas/ChangePasswordInput'
  *     responses:
  *       200:
  *         description: Password changed successfully
@@ -260,12 +271,20 @@ router.get('/profile', protect, getProfile);
  *                   example: true
  *                 message:
  *                   type: string
- *                   example: "Password changed successfully! Please login with your new password."
+ *                   example: "Mot de passe changé avec succès."
  *       400:
  *         description: Validation error (passwords don't match, too short, or same as old password)
  *       401:
  *         description: Current password is incorrect or unauthorized
  */
 router.put('/change-password', protect, changePassword);
+
+// ==================== FLUTTER CLIENT ALIASES ====================
+// These routes provide aliases for Flutter app endpoint naming conventions
+router.post('/register/step1', authLimiter, register);      // Flutter: register/step1
+router.post('/verify-otp', authLimiter, verifyEmail);       // Flutter: verify-otp
+router.post('/resend-otp', authLimiter, resendVerificationCode); // Flutter: resend-otp
+router.get('/me', protect, getProfile);                     // Flutter: me
+router.put('/update-password', protect, changePassword);    // Flutter: update-password
 
 export default router;

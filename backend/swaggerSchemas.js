@@ -336,3 +336,81 @@ schemas.SalesDashboardStats = {
     }
   }
 };
+
+// --- Auth Client Schemas ---
+
+// Client User object (response)
+schemas.ClientUser = {
+  type: 'object',
+  properties: {
+    id: { type: 'string', example: '507f1f77bcf86cd799439011' },
+    email: { type: 'string', format: 'email', example: 'client@djulah.cm' },
+    name: { type: 'string', example: 'Alice N.' },
+    isVerified: { type: 'boolean', example: true },
+    accountStatus: { type: 'string', enum: ['active', 'suspended', 'deleted'], example: 'active' },
+    createdAt: { type: 'string', format: 'date-time' }
+  }
+};
+
+// Register input
+schemas.RegisterInput = {
+  type: 'object',
+  required: ['email', 'password', 'name'],
+  properties: {
+    email: { type: 'string', format: 'email', example: 'client@djulah.cm' },
+    password: { type: 'string', minLength: 6, example: 'password123' },
+    name: { type: 'string', example: 'Alice N.' }
+  }
+};
+
+// Login input
+schemas.LoginInput = {
+  type: 'object',
+  required: ['email', 'password'],
+  properties: {
+    email: { type: 'string', format: 'email', example: 'client@djulah.cm' },
+    password: { type: 'string', example: 'password123' }
+  }
+};
+
+// Verify email input
+schemas.VerifyEmailInput = {
+  type: 'object',
+  required: ['email', 'code'],
+  properties: {
+    email: { type: 'string', format: 'email', example: 'client@djulah.cm' },
+    code: { type: 'string', example: '123456' }
+  }
+};
+
+// Forgot password input
+schemas.ForgotPasswordInput = {
+  type: 'object',
+  required: ['email'],
+  properties: {
+    email: { type: 'string', format: 'email', example: 'client@djulah.cm' }
+  }
+};
+
+// Reset password input
+schemas.ResetPasswordInput = {
+  type: 'object',
+  required: ['email', 'code', 'password', 'confirmPassword'],
+  properties: {
+    email: { type: 'string', format: 'email', example: 'client@djulah.cm' },
+    code: { type: 'string', example: '123456' },
+    password: { type: 'string', minLength: 6, example: 'newPassword123' },
+    confirmPassword: { type: 'string', example: 'newPassword123' }
+  }
+};
+
+// Change password input
+schemas.ChangePasswordInput = {
+  type: 'object',
+  required: ['currentPassword', 'newPassword', 'confirmNewPassword'],
+  properties: {
+    currentPassword: { type: 'string', example: 'oldPassword123' },
+    newPassword: { type: 'string', minLength: 6, example: 'newPassword123' },
+    confirmNewPassword: { type: 'string', example: 'newPassword123' }
+  }
+};

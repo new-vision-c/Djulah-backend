@@ -1,5 +1,10 @@
 import 'dotenv/config';
 
+// Startup logging for debugging on Render
+console.log('🚀 Starting Djulah Backend...');
+console.log(`📌 NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
+console.log(`📌 PORT: ${process.env.PORT || 5000}`);
+
 const parseCsv = (value) => {
   if (!value) return [];
   return value
@@ -13,9 +18,12 @@ const isProd = (process.env.NODE_ENV || 'development') === 'production';
 const required = (name) => {
   const v = process.env[name];
   if (!v) {
+    console.error(`❌ Missing required env var: ${name}`);
     if (isProd) {
       throw new Error(`Missing required env var: ${name}`);
     }
+  } else {
+    console.log(`✅ ${name}: configured`);
   }
   return v;
 };

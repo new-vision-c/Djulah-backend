@@ -1,11 +1,16 @@
 const dictionaries = {
   fr: {
+    // Registration
     'auth.register.missing_fields': "Email, mot de passe et nom d'utilisateur requis.",
+    'auth.register.name_required': "Le nom est requis.",
     'auth.register.success_check_email': "Inscription réussie. Vérifie ton email pour le code de vérification.",
     'auth.register.email_failed': "Inscription réussie, mais l'envoi de l'email a échoué. Utilise 'Renvoyer le code'.",
     'auth.register.already_registered_login': "Compte déjà enregistré. Connecte-toi.",
     'auth.register.verification_pending': "Vérification en attente. Consulte ton email.",
     'auth.register.failed': "Impossible de finaliser l'inscription. Réessaie plus tard.",
+
+    // Rate limiting
+    'auth.rate_limit': "Trop de requêtes. Réessaie plus tard.",
 
     'auth.verify.missing_fields': "Email et code de vérification requis.",
     'auth.verify.invalid_or_expired': "Code invalide ou expiré.",
@@ -32,7 +37,7 @@ const dictionaries = {
     'auth.forgot.failed': "Impossible de traiter la demande. Réessaie plus tard.",
 
     'auth.reset.missing_fields': "Email, code et nouveau mot de passe requis.",
-    'auth.reset.password_too_short': "Le mot de passe doit contenir au moins 6 caractères.",
+    'auth.reset.password_too_short': "Le mot de passe doit contenir au moins 8 caractères.",
     'auth.reset.passwords_not_match': "Les mots de passe ne correspondent pas.",
     'auth.reset.invalid_or_expired': "Code de réinitialisation invalide ou expiré.",
     'auth.reset.success': "Mot de passe modifié avec succès. Tu peux te connecter.",
@@ -42,7 +47,7 @@ const dictionaries = {
     'auth.profile.failed': "Impossible de récupérer le profil. Réessaie plus tard.",
 
     'auth.change_password.missing_fields': "Mot de passe actuel, nouveau mot de passe et confirmation requis.",
-    'auth.change_password.too_short': "Le nouveau mot de passe doit contenir au moins 6 caractères.",
+    'auth.change_password.too_short': "Le nouveau mot de passe doit contenir au moins 8 caractères.",
     'auth.change_password.not_match': "Le nouveau mot de passe et la confirmation ne correspondent pas.",
     'auth.change_password.current_incorrect': "Le mot de passe actuel est incorrect.",
     'auth.change_password.same_as_old': "Le nouveau mot de passe doit être différent de l'ancien.",
@@ -50,8 +55,13 @@ const dictionaries = {
     'auth.change_password.failed': "Impossible de modifier le mot de passe. Réessaie plus tard."
   },
   en: {
+    // Registration
     'auth.register.missing_fields': 'Email, password and username are required.',
+    'auth.register.name_required': 'Name is required.',
     'auth.register.success_check_email': 'Registration successful. Check your email for the verification code.',
+
+    // Rate limiting
+    'auth.rate_limit': 'Too many requests. Try again later.',
     'auth.register.email_failed': 'Registration successful, but email sending failed. Please use resend code.',
     'auth.register.already_registered_login': 'Account already registered. Please login.',
     'auth.register.verification_pending': 'Verification pending. Check your email.',
@@ -82,7 +92,7 @@ const dictionaries = {
     'auth.forgot.failed': 'Failed to process password reset request. Please try again later.',
 
     'auth.reset.missing_fields': 'Email, code, and new password are required.',
-    'auth.reset.password_too_short': 'Password must be at least 6 characters long.',
+    'auth.reset.password_too_short': 'Password must be at least 8 characters long.',
     'auth.reset.passwords_not_match': 'New password and confirm password do not match.',
     'auth.reset.invalid_or_expired': 'Invalid or expired reset code.',
     'auth.reset.success': 'Password reset successful. You can now login with your new password.',
@@ -92,7 +102,7 @@ const dictionaries = {
     'auth.profile.failed': 'Failed to retrieve profile. Please try again later.',
 
     'auth.change_password.missing_fields': 'Current password, new password, and confirm password are required.',
-    'auth.change_password.too_short': 'New password must be at least 6 characters long.',
+    'auth.change_password.too_short': 'New password must be at least 8 characters long.',
     'auth.change_password.not_match': 'New password and confirm password do not match.',
     'auth.change_password.current_incorrect': 'Current password is incorrect.',
     'auth.change_password.same_as_old': 'New password must be different from your current password.',

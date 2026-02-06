@@ -67,11 +67,14 @@ app.use(cors(corsOptions));
 
 app.use(localeMiddleware);
 
-// Rate limiting (especially for auth)
+// Rate limiting (especially for auth) - internationalized
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100,
-  message: { success: false, message: 'Too many requests from this IP' },
+  message: (req) => ({
+    success: false,
+    message: req.t ? req.t('auth.rate_limit') : 'Too many requests from this IP'
+  }),
   standardHeaders: true,
   legacyHeaders: false
 });
@@ -91,6 +94,8 @@ mongoose.connect(config.db.mongoUri)
 
 // ==================== API ROUTES ====================
 app.use('/api/auth', authRoutes);
+// Alias for Flutter client app (/api/auth/client/*)
+app.use('/api/auth/client', authRoutes);
 
 // ==================== HEALTH & WELCOME ====================
 app.get('/health', (req, res) => {

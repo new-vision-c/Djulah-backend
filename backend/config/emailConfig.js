@@ -78,19 +78,41 @@ const sendEmailViaHTTP = async (options) => {
 
 const sendEmail = sendEmailViaHTTP;
 
-export const sendVerificationEmail = async (email, code, firstName) => {
+const normalizeLocale = (locale) => {
+  if (!locale || typeof locale !== 'string') return 'en';
+  const l = locale.toLowerCase();
+  if (l.startsWith('fr')) return 'fr';
+  if (l.startsWith('en')) return 'en';
+  return 'en';
+};
+
+export const sendVerificationEmail = async (email, code, name = '', locale = 'en') => {
+  const l = normalizeLocale(locale);
+  const safeName = (name && typeof name === 'string' && name.trim().length)
+    ? name.trim()
+    : (l === 'fr' ? 'là' : 'there');
+
+  const subject = l === 'fr'
+    ? 'Djulah - Code de vérification'
+    : 'Djulah - Verification Code';
+
+  const title = l === 'fr' ? 'Bienvenue sur Djulah !' : 'Welcome to Djulah!';
+  const greeting = l === 'fr' ? `Bonjour ${safeName} !` : `Hello ${safeName}!`;
+  const codeLabel = l === 'fr' ? 'Votre code de vérification est :' : 'Your verification code is:';
+  const expiry = l === 'fr' ? 'Expire dans 10 minutes' : 'Expires in 10 minutes';
+
   const html = `
     <div style="max-width: 600px; margin: 30px auto; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 15px 40px rgba(0,0,0,0.15); font-family: Arial, sans-serif;">
       <div style="background: linear-gradient(135deg, #4CAF50, #45a049); color: white; padding: 40px 20px; text-align: center;">
-        <h1>Welcome to Djulah!</h1>
+        <h1>${title}</h1>
       </div>
       <div style="padding: 50px 30px; text-align: center;">
-        <h2>Hello ${firstName}!</h2>
-        <p>Your verification code is:</p>
+        <h2>${greeting}</h2>
+        <p>${codeLabel}</p>
         <div style="font-size: 48px; font-weight: bold; letter-spacing: 12px; color: #4CAF50; background: #f0f8f0; padding: 25px; border-radius: 16px; display: inline-block; margin: 25px 0;">
           ${code}
         </div>
-        <p><strong>Expires in 10 minutes</strong></p>
+        <p><strong>${expiry}</strong></p>
       </div>
       <div style="background: #1a1a1a; color: #aaa; padding: 25px; text-align: center; font-size: 13px;">
         <p>&copy; ${new Date().getFullYear()} Djulah</p>
@@ -98,22 +120,36 @@ export const sendVerificationEmail = async (email, code, firstName) => {
     </div>
   `;
 
-  return await sendEmail({ to: email, subject: 'Your Djulah Verification Code', html });
+  return await sendEmail({ to: email, subject, html });
 };
 
-export const sendPasswordResetEmail = async (email, code, firstName = '') => {
+export const sendPasswordResetEmail = async (email, code, name = '', locale = 'en') => {
+  const l = normalizeLocale(locale);
+  const safeName = (name && typeof name === 'string' && name.trim().length)
+    ? name.trim()
+    : (l === 'fr' ? 'là' : 'there');
+
+  const subject = l === 'fr'
+    ? 'Djulah - Code de réinitialisation du mot de passe'
+    : 'Djulah - Password Reset Code';
+
+  const title = l === 'fr' ? 'Réinitialisation du mot de passe' : 'Password Reset';
+  const greeting = l === 'fr' ? `Bonjour ${safeName} !` : `Hello ${safeName}!`;
+  const codeLabel = l === 'fr' ? 'Votre code de réinitialisation est :' : 'Your password reset code:';
+  const expiry = l === 'fr' ? 'Valable uniquement 10 minutes' : 'Valid for 10 minutes only';
+
   const html = `
     <div style="max-width: 600px; margin: 30px auto; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 15px 40px rgba(0,0,0,0.15); font-family: Arial, sans-serif;">
       <div style="background: linear-gradient(135deg, #e91e63, #c2185b); color: white; padding: 40px 20px; text-align: center;">
-        <h1>Password Reset</h1>
+        <h1>${title}</h1>
       </div>
       <div style="padding: 50px 30px; text-align: center;">
-        <h2>Hello ${firstName || 'there'}!</h2>
-        <p>Your password reset code:</p>
+        <h2>${greeting}</h2>
+        <p>${codeLabel}</p>
         <div style="font-size: 48px; font-weight: bold; letter-spacing: 12px; color: #e91e63; background: #fce4ec; padding: 25px; border-radius: 16px; display: inline-block; margin: 25px 0;">
           ${code}
         </div>
-        <p><strong>Valid for 10 minutes only</strong></p>
+        <p><strong>${expiry}</strong></p>
       </div>
       <div style="background: #1a1a1a; color: #aaa; padding: 25px; text-align: center; font-size: 13px;">
         <p>&copy; ${new Date().getFullYear()} Djulah</p>
@@ -121,7 +157,7 @@ export const sendPasswordResetEmail = async (email, code, firstName = '') => {
     </div>
   `;
 
-  return await sendEmail({ to: email, subject: 'Djulah - Password Reset Code', html });
+  return await sendEmail({ to: email, subject, html });
 };
 
 export const sendKycSubmissionEmail = async () => ({

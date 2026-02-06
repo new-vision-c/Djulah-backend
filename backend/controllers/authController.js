@@ -36,20 +36,15 @@ export const register = async (req, res) => {
     const email = normalizeIdentifier(req.body.email);
     const password = req.body.password;
 
-    const providedFirstName = normalizeIdentifier(req.body.firstName);
-    const providedLastName = normalizeIdentifier(req.body.lastName);
-    const providedPhoneNumber = normalizeIdentifier(req.body.phoneNumber);
+    // Extract name from various possible field names
+    const name = req.body.name || req.body.fullName || req.body.fullname || req.body.username;
+    if (!name || typeof name !== 'string' || name.trim().length === 0) {
+      return ResponseHandler.validationError(res, req.t('auth.register.name_required'));
+    }
 
-    const fullNameCandidate = normalizeIdentifier(req.body.fullName) ||
-      normalizeIdentifier(req.body.name) ||
-      normalizeIdentifier(req.body.username);
-    const normalizedFromFullName = normalizeFullName(fullNameCandidate);
+    const phoneNumber = normalizeIdentifier(req.body.phoneNumber) || normalizeIdentifier(req.body.phone) || null;
 
-    const firstName = providedFirstName || normalizedFromFullName.firstName;
-    const lastName = providedLastName || normalizedFromFullName.lastName;
-    const phoneNumber = providedPhoneNumber || normalizeIdentifier(req.body.phone) || null;
-
-    if (!email || !password || !firstName || !lastName) {
+    if (!email || !password || !name) {
       return ResponseHandler.validationError(res, req.t('auth.register.missing_fields'));
     }
 
@@ -63,19 +58,23 @@ export const register = async (req, res) => {
       }
     }
 
-    // Create new user
-    const user = await ClientUser.create({
-      firstName,
-      lastName,
-      email,
-      password
+    // Create client user
+    const user = new ClientUser({
+      name: name.trim(),
+      email: email,
+      password: password,
+      isVerified: false,
+      verificationCode: undefined,
+      verificationCodeExpires: undefined,
+      failedVerificationAttempts: 0,
+      accountStatus: 'active'
     });
-    const code = user.generateVerificationCode();
+    user.generateVerificationCode();
     await user.save({ validateBeforeSave: false });
 
     // Send verification email
     try {
-      const emailResult = await sendVerificationEmail(email, code, firstName);
+      const emailResult = await sendVerificationEmail(email, user.verificationCode, name, req.locale);
       if (!emailResult.success) {
         return ResponseHandler.serverError(
           res,
@@ -93,7 +92,7 @@ export const register = async (req, res) => {
     return ResponseHandler.created(
       res,
       req.t('auth.register.success_check_email'),
-      { email, fullName: `${firstName} ${lastName}` }
+      { email, name: name.trim() }
     );
 
   } catch (error) {
@@ -144,7 +143,7 @@ export const verifyEmail = async (req, res) => {
         token,
         user: {
           id: user._id,
-          fullName: `${user.firstName} ${user.lastName}`,
+          name: user.name,
           email: user.email,
           avatar: user.avatar || null,
           createdAt: user.createdAt
@@ -187,7 +186,7 @@ export const resendVerificationCode = async (req, res) => {
 
     // Send email
     try {
-      await sendVerificationEmail(email, code, user.firstName);
+      await sendVerificationEmail(email, code, user.name);
     } catch (emailError) {
       console.error('Email sending failed:', emailError);
       return ResponseHandler.serverError(res, req.t('auth.resend.failed'));
@@ -228,8 +227,6 @@ export const login = async (req, res) => {
       return ResponseHandler.forbidden(res, req.t('auth.login.email_not_verified'));
     }
 
-    // Discriminator already ensures this is a client user
-
     // Update last login
     user.lastLogin = Date.now();
     await user.save({ validateBeforeSave: false });
@@ -244,9 +241,7 @@ export const login = async (req, res) => {
         token,
         user: {
           id: user._id,
-          fullName: `${user.firstName} ${user.lastName}`,
-          firstName: user.firstName,
-          lastName: user.lastName,
+          name: user.name,
           email: user.email,
           avatar: user.avatar || null,
           createdAt: user.createdAt
@@ -287,7 +282,7 @@ export const forgotPassword = async (req, res) => {
 
     // Send email
     try {
-      await sendPasswordResetEmail(user.email, code, user.firstName);
+      await sendPasswordResetEmail(user.email, code, user.name, req.locale);
     } catch (emailError) {
       console.error('Email sending failed:', emailError);
       return ResponseHandler.serverError(res, req.t('auth.forgot.failed'));
@@ -320,8 +315,8 @@ export const resetPassword = async (req, res) => {
       return ResponseHandler.validationError(res, req.t('auth.reset.passwords_not_match'));
     }
 
-    // Validate password length
-    if (password.length < 6) {
+    // Validate password length (8 characters minimum)
+    if (password.length < 8) {
       return ResponseHandler.validationError(res, req.t('auth.reset.password_too_short'));
     }
 
@@ -367,19 +362,17 @@ export const getProfile = async (req, res) => {
       return ResponseHandler.notFound(res, req.t('auth.profile.user_not_found'));
     }
 
-    const fullName = `${user.firstName} ${user.lastName}`.trim();
+    // Return user data without password
+    const userResponse = {
+      id: user._id,
+      email: user.email,
+      name: user.name,
+      isVerified: user.isVerified,
+      accountStatus: user.accountStatus,
+      createdAt: user.createdAt
+    };
 
-    return ResponseHandler.success(res, {
-      user: {
-        id: user._id,
-        fullName,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        avatar: user.avatar || null,
-        createdAt: user.createdAt
-      }
-    });
+    return ResponseHandler.success(res, userResponse);
 
   } catch (error) {
     console.error('Get profile error:', error);
@@ -400,8 +393,8 @@ export const changePassword = async (req, res) => {
       );
     }
 
-    // Validate new password length
-    if (newPassword.length < 6) {
+    // Validate new password length (8 characters minimum)
+    if (newPassword.length < 8) {
       return ResponseHandler.validationError(
         res,
         req.t('auth.change_password.too_short')
