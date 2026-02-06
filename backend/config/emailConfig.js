@@ -1,82 +1,140 @@
 // config/emailConfig.js
 
-import config from './index.js';
+import nodemailer from "nodemailer";
+
+// Configuration du transporteur SMTP Gmail
+const createGmailTransporter = () => {
+  if (process.env.EMAIL_USER && process.env.EMAIL_PASSWORD) {
+    console.log("📧 Configuration Gmail SMTP avec les identifiants fournis");
+    return nodemailer.createTransporter({
+      service: "gmail",
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASSWORD,
+      },
+    });
+  }
+  return null;
+};
+
+// Send email via Gmail SMTP
+const sendEmailViaGmail = async (options) => {
+  const transporter = createGmailTransporter();
+
+  if (!transporter) {
+    console.error(
+      "❌ Gmail SMTP non configuré - EMAIL_USER et EMAIL_PASSWORD requis",
+    );
+    return { success: false, error: "Gmail SMTP non configuré" };
+  }
+
+  try {
+    console.log("📧 Envoi via Gmail SMTP...");
+    const info = await transporter.sendMail({
+      from: `Djulah <${process.env.EMAIL_USER}>`,
+      to: options.to,
+      subject: options.subject,
+      html: options.html,
+    });
+
+    console.log("✅ Email envoyé avec succès via Gmail:", info.messageId);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error("❌ Erreur Gmail SMTP:", error.message);
+    return { success: false, error: error.message };
+  }
+};
 
 // Send email using HTTP API (bypasses SMTP port blocking on Render)
 const sendEmailViaHTTP = async (options) => {
   // Use Resend HTTP API (no SMTP ports needed!)
   if (config.email.resendApiKey) {
-    console.log('📧 Using Resend HTTP API (no SMTP ports - works on Render!)');
+    console.log("📧 Using Resend HTTP API (no SMTP ports - works on Render!)");
     try {
-      const response = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
+      const response = await fetch("https://api.resend.com/emails", {
+        method: "POST",
         headers: {
-          'Authorization': `Bearer ${config.email.resendApiKey}`,
-          'Content-Type': 'application/json'
+          Authorization: `Bearer ${config.email.resendApiKey}`,
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           from: `Djulah <${config.email.from}>`,
           to: [options.to],
           subject: options.subject,
-          html: options.html
-        })
+          html: options.html,
+        }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Failed to send email');
+        throw new Error(data.message || "Failed to send email");
       }
 
-      console.log('✅ Email sent successfully via HTTP API:', data.id);
+      console.log("✅ Email sent successfully via HTTP API:", data.id);
       return { success: true };
     } catch (error) {
-      console.error('❌ Email error:', error.message);
+      console.error("❌ Email error:", error.message);
       return { success: false, error: error.message };
     }
   }
 
   // Use Brevo HTTP API
   if (config.email.brevoApiKey) {
-    console.log('📧 Using Brevo HTTP API (no SMTP ports - works on Render!)');
+    console.log("📧 Using Brevo HTTP API (no SMTP ports - works on Render!)");
     try {
-      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
-        method: 'POST',
+      const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+        method: "POST",
         headers: {
-          'api-key': config.email.brevoApiKey,
-          'Content-Type': 'application/json'
+          "api-key": config.email.brevoApiKey,
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           sender: {
-            name: 'Djulah',
-            email: config.email.from || config.email.brevoEmail
+            name: "Djulah",
+            email: config.email.from || config.email.brevoEmail,
           },
           to: [{ email: options.to }],
           subject: options.subject,
-          htmlContent: options.html
-        })
+          htmlContent: options.html,
+        }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Failed to send email');
+        throw new Error(data.message || "Failed to send email");
       }
 
-      console.log('✅ Email sent successfully via HTTP API:', data.messageId);
+      console.log("✅ Email sent successfully via HTTP API:", data.messageId);
       return { success: true };
     } catch (error) {
-      console.error('❌ Email error:', error.message);
+      console.error("❌ Email error:", error.message);
       return { success: false, error: error.message };
     }
   }
 
   // Fallback error
-  console.error('❌ No email provider configured (RESEND_API_KEY or BREVO_API_KEY required)');
-  return { success: false, error: 'No email provider configured' };
+  console.error(
+    "❌ No email provider configured (RESEND_API_KEY or BREVO_API_KEY required)",
+  );
+  return { success: false, error: "No email provider configured" };
 };
 
-const sendEmail = sendEmailViaHTTP;
+// Fonction principale d'envoi d'email avec fallback
+const sendEmail = async (options) => {
+  // Priorité 1: Gmail SMTP (pour développement local)
+  if (process.env.EMAIL_USER && process.env.EMAIL_PASSWORD) {
+    const gmailResult = await sendEmailViaGmail(options);
+    if (gmailResult.success) {
+      return gmailResult;
+    }
+    console.log("⚠️ Gmail SMTP failed, trying HTTP APIs...");
+  }
+
+  // Priorité 2: HTTP APIs (pour production/Render)
+  return await sendEmailViaHTTP(options);
+};
 
 const normalizeLocale = (locale) => {
   if (!locale || typeof locale !== 'string') return 'en';
@@ -162,22 +220,22 @@ export const sendPasswordResetEmail = async (email, code, name = '', locale = 'e
 
 export const sendKycSubmissionEmail = async () => ({
   success: false,
-  error: 'Disabled: KYC emails are not used by the auth-only backend'
+  error: "Disabled: KYC emails are not used by the auth-only backend",
 });
 
 export const sendKycApprovalEmail = async () => ({
   success: false,
-  error: 'Disabled: KYC emails are not used by the auth-only backend'
+  error: "Disabled: KYC emails are not used by the auth-only backend",
 });
 
 export const sendKycRejectionEmail = async () => ({
   success: false,
-  error: 'Disabled: KYC emails are not used by the auth-only backend'
+  error: "Disabled: KYC emails are not used by the auth-only backend",
 });
 
 export const sendUserInvitationEmail = async () => ({
   success: false,
-  error: 'Disabled: invitation emails are not used by the auth-only backend'
+  error: "Disabled: invitation emails are not used by the auth-only backend",
 });
 
 /*
