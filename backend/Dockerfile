@@ -5,13 +5,13 @@ FROM node:18-alpine
 WORKDIR /app
 
 # Copie des fichiers package
-COPY backend/package*.json ./
+COPY /package*.json ./
 
 # Installation des dépendances
 RUN npm ci --only=production
 
 # Copie du code source
-COPY backend/ .
+COPY . .
 
 # Création du répertoire des scripts et permissions
 RUN mkdir -p scripts && chmod +x scripts/*.js
