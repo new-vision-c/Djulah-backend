@@ -17,7 +17,7 @@ services:
 
       # Base de données MongoDB
       - key: MONGODB_URI
-        sync: false # À configurer manuellement sur Render
+        value: "mongodb+srv://cesaristos5:D5NfqTbJGXpybjqL@k2ngrouptest.8xgdo.mongodb.net/djulah?retryWrites=true&w=majority&appName=k2ngrouptest&serverSelectionTimeoutMS=30000&connectTimeoutMS=30000&maxPoolSize=10&socketTimeoutMS=30000"
 
       # JWT
       - key: JWT_SECRET
@@ -69,12 +69,12 @@ services:
     domains:
       - djulah-backend.onrender.com
 
-# Configuration des bases de données (optionnel si vous utilisez MongoDB externe)
-databases:
-  # Si vous voulez utiliser MongoDB de Render
-  # - name: djulah-mongodb
-  #   databaseName: djulah
-  #   user: djulah_user
-  #   plan: free
-  #   region: oregon
-  #   ipAllowList: []  # Restreindre l'accès si nécessaire
+# Configuration des bases de données (désactivée - utilisation base externe)
+# databases:
+#   # Base de données MongoDB pour Djulah
+#   - name: djulah-mongodb
+#     databaseName: djulah
+#     user: djulah_user
+#     plan: free
+#     region: oregon
+#     ipAllowList: []  # Restreindre l'accès si nécessaire
