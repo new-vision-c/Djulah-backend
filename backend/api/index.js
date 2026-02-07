@@ -115,12 +115,22 @@ app.use((err, req, res, next) => {
 });
 
 // Handler Vercel
-export default async function handler(req, res) {
+export default function handler(req, res) {
   try {
-    await connectDB();
-    return app(req, res);
-  } catch (err) {
-    console.error("Handler error:", err);
-    res.status(500).json({ success: false, message: "Server error" });
+    res.status(200).json({
+      status: "OK",
+      service: "Djulah API",
+      timestamp: new Date().toISOString(),
+      version: "1.0.0",
+      message: "Test diagnostic Vercel - sans imports",
+      method: req.method,
+      url: req.url,
+    });
+  } catch (error) {
+    console.error("Handler error:", error);
+    res.status(500).json({
+      status: "ERROR",
+      message: error.message,
+    });
   }
 }
