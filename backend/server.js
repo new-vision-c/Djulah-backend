@@ -23,14 +23,24 @@ const app = express();
 app.set("trust proxy", 1);
 
 // ==================== SECURITY & MIDDLEWARE ====================
-// Helmet configuration - Swagger-friendly
+// Helmet configuration - Swagger-friendly avec CDN Cloudflare
 app.use(
   helmet({
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+        styleSrc: [
+          "'self'",
+          "'unsafe-inline'",
+          "https://cdn.jsdelivr.net",
+          "https://cdnjs.cloudflare.com",
+        ],
+        scriptSrc: [
+          "'self'",
+          "'unsafe-inline'",
+          "https://cdn.jsdelivr.net",
+          "https://cdnjs.cloudflare.com",
+        ],
         imgSrc: ["'self'", "data:", "https://validator.swagger.io"],
         connectSrc: ["'self'"],
       },
