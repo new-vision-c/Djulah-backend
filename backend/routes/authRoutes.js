@@ -1,17 +1,17 @@
 // routes/authRoutes.js
-import express from 'express';
-import rateLimit from 'express-rate-limit';
+import express from "express";
+import rateLimit from "express-rate-limit";
 import {
-  register,
-  verifyEmail,
-  resendVerificationCode,
-  login,
+  changePassword,
   forgotPassword,
-  resetPassword,
   getProfile,
-  changePassword
-} from '../controllers/authController.js';
-import { protect } from '../middlewares/authMiddleware.js';
+  login,
+  register,
+  resendVerificationCode,
+  resetPassword,
+  verifyEmail,
+} from "../controllers/authController.js";
+import { protect } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 
@@ -21,8 +21,10 @@ const authLimiter = rateLimit({
   max: 50,
   message: (req) => ({
     success: false,
-    message: req.t ? req.t('auth.rate_limit') : 'Too many requests. Try again later.'
-  })
+    message: req.t
+      ? req.t("auth.rate_limit")
+      : "Too many requests. Try again later.",
+  }),
 });
 
 /**
@@ -57,14 +59,22 @@ const authLimiter = rateLimit({
  *                 data:
  *                   type: object
  *                   properties:
- *                     email: { type: string, example: 'client@djulah.cm' }
- *                     name: { type: string, example: 'Alice N.' }
+ *                     step: { type: number, example: 1 }
+ *                     user:
+ *                       type: object
+ *                       properties:
+ *                         id: { type: string, example: '...' }
+ *                         fullname: { type: string, example: 'Alice N.' }
+ *                         email: { type: string, example: 'client@djulah.cm' }
+ *                     token: { type: string, example: 'eyJ...' }
+ *                     requiresOtp: { type: boolean, example: true }
+ *                     otpCode: { type: string, example: '123456', description: 'OTP code (dev only)' }
  *       400:
  *         description: Validation error (missing or invalid fields)
  *       409:
  *         description: User already exists (either verified or pending verification)
  */
-router.post('/register', authLimiter, register);
+router.post("/register", authLimiter, register);
 
 /**
  * @swagger
@@ -72,12 +82,22 @@ router.post('/register', authLimiter, register);
  *   post:
  *     summary: Verify email with 6-digit code
  *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/VerifyEmailInput'
+ *             type: object
+ *             required:
+ *               - code
+ *             properties:
+ *               code:
+ *                 type: string
+ *                 pattern: '^[0-9]{6}$'
+ *                 description: 6-digit verification code received by email
+ *                 example: "123456"
  *     responses:
  *       200:
  *         description: Email verified – returns JWT token
@@ -87,17 +107,23 @@ router.post('/register', authLimiter, register);
  *               type: object
  *               properties:
  *                 success: { type: boolean, example: true }
- *                 message: { type: string, example: 'Email vérifié avec succès.' }
+ *                 message: { type: string, example: 'Email verified successfully.' }
  *                 data:
  *                   type: object
  *                   properties:
- *                     token: { type: string, example: 'eyJ...' }
+ *                     verified: { type: boolean, example: true }
+ *                     tokens:
+ *                       type: object
+ *                       properties:
+ *                         accessToken: { type: string, example: 'eyJ...' }
  *                     user:
  *                       $ref: '#/components/schemas/ClientUser'
  *       400:
- *         description: Invalid or expired code
+ *         description: Invalid or expired code / session token
+ *       401:
+ *         description: Missing or invalid session token
  */
-router.post('/verify-email', authLimiter, verifyEmail);
+router.post("/verify-email", authLimiter, verifyEmail);
 
 /**
  * @swagger
@@ -124,7 +150,7 @@ router.post('/verify-email', authLimiter, verifyEmail);
  *       429:
  *         description: Too many resend requests
  */
-router.post('/resend-verification', authLimiter, resendVerificationCode);
+router.post("/resend-verification", authLimiter, resendVerificationCode);
 
 /**
  * @swagger
@@ -159,7 +185,7 @@ router.post('/resend-verification', authLimiter, resendVerificationCode);
  *       403:
  *         description: Email not verified
  */
-router.post('/login', authLimiter, login);
+router.post("/login", authLimiter, login);
 
 /**
  * @swagger
@@ -186,7 +212,7 @@ router.post('/login', authLimiter, login);
  *       404:
  *         description: No verified account found
  */
-router.post('/forgot-password', authLimiter, forgotPassword);
+router.post("/forgot-password", authLimiter, forgotPassword);
 
 /**
  * @swagger
@@ -217,7 +243,7 @@ router.post('/forgot-password', authLimiter, forgotPassword);
  *       400:
  *         description: Invalid or expired code
  */
-router.post('/reset-password', authLimiter, resetPassword);
+router.post("/reset-password", authLimiter, resetPassword);
 
 /**
  * @swagger
@@ -241,7 +267,7 @@ router.post('/reset-password', authLimiter, resetPassword);
  *       401:
  *         description: Unauthorized - no token provided
  */
-router.get('/profile', protect, getProfile);
+router.get("/profile", protect, getProfile);
 
 /**
  * @swagger
@@ -277,14 +303,14 @@ router.get('/profile', protect, getProfile);
  *       401:
  *         description: Current password is incorrect or unauthorized
  */
-router.put('/change-password', protect, changePassword);
+router.put("/change-password", protect, changePassword);
 
 // ==================== FLUTTER CLIENT ALIASES ====================
 // These routes provide aliases for Flutter app endpoint naming conventions
-router.post('/register/step1', authLimiter, register);      // Flutter: register/step1
-router.post('/verify-otp', authLimiter, verifyEmail);       // Flutter: verify-otp
-router.post('/resend-otp', authLimiter, resendVerificationCode); // Flutter: resend-otp
-router.get('/me', protect, getProfile);                     // Flutter: me
-router.put('/update-password', protect, changePassword);    // Flutter: update-password
+router.post("/register/step1", authLimiter, register); // Flutter: register/step1
+router.post("/verify-otp", authLimiter, verifyEmail); // Flutter: verify-otp
+router.post("/resend-otp", authLimiter, resendVerificationCode); // Flutter: resend-otp
+router.get("/me", protect, getProfile); // Flutter: me
+router.put("/update-password", protect, changePassword); // Flutter: update-password
 
 export default router;

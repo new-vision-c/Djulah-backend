@@ -1,12 +1,15 @@
 // controllers/authController.js
-import User from '../models/User.js';
-import ClientUser from '../models/ClientUser.js';
-import ResponseHandler from '../utils/responseHandler.js';
-import { sendVerificationEmail, sendPasswordResetEmail } from '../config/emailConfig.js';
-import { generateToken } from '../middlewares/authMiddleware.js';
+import {
+  sendPasswordResetEmail,
+  sendVerificationEmail,
+} from "../config/emailConfig.js";
+import { generateToken } from "../middlewares/authMiddleware.js";
+import ClientUser from "../models/ClientUser.js";
+import User from "../models/User.js";
+import ResponseHandler from "../utils/responseHandler.js";
 
 const normalizeFullName = (fullName) => {
-  if (!fullName || typeof fullName !== 'string') {
+  if (!fullName || typeof fullName !== "string") {
     return { firstName: undefined, lastName: undefined };
   }
 
@@ -16,17 +19,17 @@ const normalizeFullName = (fullName) => {
   }
 
   if (parts.length === 1) {
-    return { firstName: parts[0], lastName: '-' };
+    return { firstName: parts[0], lastName: "-" };
   }
 
   return {
     firstName: parts[0],
-    lastName: parts.slice(1).join(' ')
+    lastName: parts.slice(1).join(" "),
   };
 };
 
 const normalizeIdentifier = (value) => {
-  if (!value || typeof value !== 'string') return undefined;
+  if (!value || typeof value !== "string") return undefined;
   const trimmed = value.trim();
   return trimmed.length ? trimmed : undefined;
 };
@@ -37,29 +40,49 @@ export const register = async (req, res) => {
     const password = req.body.password;
 
     // Extract name from various possible field names
-    const name = req.body.name || req.body.fullName || req.body.fullname || req.body.username;
-    if (!name || typeof name !== 'string' || name.trim().length === 0) {
-      return ResponseHandler.validationError(res, req.t('auth.register.name_required'));
+    const name =
+      req.body.name ||
+      req.body.fullName ||
+      req.body.fullname ||
+      req.body.username;
+    if (!name || typeof name !== "string" || name.trim().length === 0) {
+      return ResponseHandler.validationError(
+        res,
+        req.t("auth.register.name_required"),
+      );
     }
 
-    const phoneNumber = normalizeIdentifier(req.body.phoneNumber) || normalizeIdentifier(req.body.phone) || null;
+    const phoneNumber =
+      normalizeIdentifier(req.body.phoneNumber) ||
+      normalizeIdentifier(req.body.phone) ||
+      null;
 
     if (!email || !password || !name) {
-      return ResponseHandler.validationError(res, req.t('auth.register.missing_fields'));
+      return ResponseHandler.validationError(
+        res,
+        req.t("auth.register.missing_fields"),
+      );
     }
 
     // Check for existing user
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       if (existingUser.isVerified) {
-        return ResponseHandler.conflict(res, req.t('auth.register.already_registered_login'));
+        return ResponseHandler.conflict(
+          res,
+          req.t("auth.register.already_registered_login"),
+        );
       } else {
-        return ResponseHandler.validationError(res, req.t('auth.register.verification_pending'));
+        // Supprimer l'utilisateur non vérifié pour permettre une nouvelle inscription (aligné Prisma)
+        await User.deleteOne({ email });
       }
     }
 
     // Create client user
+    const { firstName, lastName } = normalizeFullName(name);
     const user = new ClientUser({
+      firstName: firstName || name,
+      lastName: lastName || "-",
       name: name.trim(),
       email: email,
       password: password,
@@ -67,55 +90,115 @@ export const register = async (req, res) => {
       verificationCode: undefined,
       verificationCodeExpires: undefined,
       failedVerificationAttempts: 0,
-      accountStatus: 'active'
+      accountStatus: "active",
     });
     user.generateVerificationCode();
     await user.save({ validateBeforeSave: false });
 
-    // Send verification email
+    // Générer un sessionToken JWT temporaire (24h) pour la vérification OTP (aligné Prisma)
+    const sessionToken = generateToken(user._id, {
+      step: "registration",
+      type: "session",
+      expiresIn: "24h",
+    });
+
+    // Send verification email (optionnel en dev)
     try {
-      const emailResult = await sendVerificationEmail(email, user.verificationCode, name, req.locale);
+      const emailResult = await sendVerificationEmail(
+        email,
+        user.verificationCode,
+        name,
+        req.locale,
+      );
       if (!emailResult.success) {
-        return ResponseHandler.serverError(
-          res,
-          req.t('auth.register.email_failed')
-        );
+        console.warn("Email non envoyé (mode dev?):", emailResult.error);
       }
     } catch (emailError) {
-      console.error('Email sending failed:', emailError);
-      return ResponseHandler.serverError(
-        res,
-        req.t('auth.register.email_failed')
-      );
+      console.warn("Email sending failed (mode dev?):", emailError);
+      // Ne pas bloquer le flow
     }
 
+    // Réponse alignée sur Prisma : inclure sessionToken et requiresOtp
     return ResponseHandler.created(
       res,
-      req.t('auth.register.success_check_email'),
-      { email, name: name.trim() }
+      req.t("auth.register.success_check_email"),
+      {
+        step: 1,
+        user: {
+          id: user._id,
+          fullname: name.trim(),
+          email,
+        },
+        token: sessionToken,
+        requiresOtp: true,
+        otpCode:
+          process.env.NODE_ENV !== "production"
+            ? user.verificationCode
+            : undefined,
+      },
     );
-
   } catch (error) {
-    console.error('Registration error:', error);
-    return ResponseHandler.serverError(res, req.t('auth.register.failed'), error);
+    console.error("Registration error:", error);
+    return ResponseHandler.serverError(
+      res,
+      req.t("auth.register.failed"),
+      error,
+    );
   }
 };
 
 export const verifyEmail = async (req, res) => {
   try {
-    const email = normalizeIdentifier(req.body.email);
-    const code = normalizeIdentifier(req.body.code) || normalizeIdentifier(req.body.otp);
+    const code =
+      normalizeIdentifier(req.body.code) || normalizeIdentifier(req.body.otp);
+
+    // Récupérer le sessionToken depuis le header Authorization: Bearer <token>
+    let sessionToken;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith("Bearer")) {
+      sessionToken = authHeader.split(" ")[1];
+    }
+
+    if (!sessionToken) {
+      return ResponseHandler.validationError(
+        res,
+        req.t("auth.verify.token_required"),
+      );
+    }
+
+    // Vérifier et décoder le sessionToken JWT (aligné Prisma)
+    let decoded;
+    try {
+      decoded = jwt.verify(sessionToken, config.jwt.secret);
+      if (decoded.type !== "session" || decoded.step !== "registration") {
+        return ResponseHandler.validationError(
+          res,
+          req.t("auth.verify.invalid_session"),
+        );
+      }
+    } catch (tokenError) {
+      return ResponseHandler.validationError(
+        res,
+        req.t("auth.verify.session_expired"),
+      );
+    }
+
+    // Récupérer l'email depuis le payload du token
+    const email = decoded.email;
 
     // Validate input
-    if (!email || !code) {
-      return ResponseHandler.validationError(res, req.t('auth.verify.missing_fields'));
+    if (!code) {
+      return ResponseHandler.validationError(
+        res,
+        req.t("auth.verify.code_required"),
+      );
     }
 
     // Find user with valid verification code
     const user = await ClientUser.findOne({
       email,
       verificationCode: code,
-      verificationCodeExpires: { $gt: Date.now() }
+      verificationCodeExpires: { $gt: Date.now() },
     });
 
     if (!user) {
@@ -124,7 +207,10 @@ export const verifyEmail = async (req, res) => {
       if (failedUser && !failedUser.isVerified) {
         failedUser.incrementFailedAttempts();
       }
-      return ResponseHandler.validationError(res, req.t('auth.verify.invalid_or_expired'));
+      return ResponseHandler.validationError(
+        res,
+        req.t("auth.verify.invalid_or_expired"),
+      );
     }
 
     // Verify user
@@ -132,28 +218,32 @@ export const verifyEmail = async (req, res) => {
     user.verificationCode = undefined;
     user.verificationCodeExpires = undefined;
     user.failedVerificationAttempts = 0;
-    await user.save();
+    await user.save({ validateBeforeSave: false });
 
     const token = generateToken(user._id);
 
+    // Réponse alignée sur Prisma
     return ResponseHandler.successWithMessage(
       res,
-      req.t('auth.verify.success'),
+      req.t("auth.verify.success"),
       {
-        token,
+        verified: true,
+        tokens: {
+          accessToken: token,
+          // TODO: ajouter refreshToken si nécessaire
+        },
         user: {
           id: user._id,
-          name: user.name,
+          fullname: user.name,
           email: user.email,
           avatar: user.avatar || null,
-          createdAt: user.createdAt
-        }
-      }
+          createdAt: user.createdAt,
+        },
+      },
     );
-
   } catch (error) {
-    console.error('Verification error:', error);
-    return ResponseHandler.serverError(res, req.t('auth.verify.failed'), error);
+    console.error("Verification error:", error);
+    return ResponseHandler.serverError(res, req.t("auth.verify.failed"), error);
   }
 };
 
@@ -162,22 +252,34 @@ export const resendVerificationCode = async (req, res) => {
     const email = normalizeIdentifier(req.body.email);
 
     if (!email) {
-      return ResponseHandler.validationError(res, req.t('auth.resend.email_required'));
+      return ResponseHandler.validationError(
+        res,
+        req.t("auth.resend.email_required"),
+      );
     }
 
     const user = await ClientUser.findOne({ email });
 
     if (!user) {
-      return ResponseHandler.notFound(res, req.t('auth.resend.user_not_found'));
+      return ResponseHandler.notFound(res, req.t("auth.resend.user_not_found"));
     }
 
     if (user.isVerified) {
-      return ResponseHandler.validationError(res, req.t('auth.resend.already_verified'));
+      return ResponseHandler.validationError(
+        res,
+        req.t("auth.resend.already_verified"),
+      );
     }
 
-    // Rate limiting - 1 minute between resends
-    if (user.verificationCodeResentAt && Date.now() - user.verificationCodeResentAt < 60000) {
-      return ResponseHandler.tooManyRequests(res, req.t('auth.resend.too_many_requests'));
+    // Rate limiting - 5 minute between resends
+    if (
+      user.verificationCodeResentAt &&
+      Date.now() - user.verificationCodeResentAt < 60000 * 5
+    ) {
+      return ResponseHandler.tooManyRequests(
+        res,
+        req.t("auth.resend.too_many_requests"),
+      );
     }
 
     // Generate new code
@@ -188,18 +290,17 @@ export const resendVerificationCode = async (req, res) => {
     try {
       await sendVerificationEmail(email, code, user.name);
     } catch (emailError) {
-      console.error('Email sending failed:', emailError);
-      return ResponseHandler.serverError(res, req.t('auth.resend.failed'));
+      console.error("Email sending failed:", emailError);
+      return ResponseHandler.serverError(res, req.t("auth.resend.failed"));
     }
 
     return ResponseHandler.successWithMessage(
       res,
-      req.t('auth.resend.success')
+      req.t("auth.resend.success"),
     );
-
   } catch (error) {
-    console.error('Resend verification code error:', error);
-    return ResponseHandler.serverError(res, req.t('auth.resend.failed'), error);
+    console.error("Resend verification code error:", error);
+    return ResponseHandler.serverError(res, req.t("auth.resend.failed"), error);
   }
 };
 
@@ -210,21 +311,29 @@ export const login = async (req, res) => {
 
     // Validate input
     if (!email || !password) {
-      return ResponseHandler.validationError(res, req.t('auth.login.missing_fields'));
+      return ResponseHandler.validationError(
+        res,
+        req.t("auth.login.missing_fields"),
+      );
     }
 
     // Find user with password
-    const user = await ClientUser.findOne({ email })
-      .select('+password');
+    const user = await ClientUser.findOne({ email }).select("+password");
 
     // Validate credentials
     if (!user || !(await user.comparePassword(password))) {
-      return ResponseHandler.unauthorized(res, req.t('auth.login.invalid_credentials'));
+      return ResponseHandler.unauthorized(
+        res,
+        req.t("auth.login.invalid_credentials"),
+      );
     }
 
     // Check if email is verified
     if (!user.isVerified) {
-      return ResponseHandler.forbidden(res, req.t('auth.login.email_not_verified'));
+      return ResponseHandler.forbidden(
+        res,
+        req.t("auth.login.email_not_verified"),
+      );
     }
 
     // Update last login
@@ -236,7 +345,7 @@ export const login = async (req, res) => {
 
     return ResponseHandler.successWithMessage(
       res,
-      req.t('auth.login.success'),
+      req.t("auth.login.success"),
       {
         token,
         user: {
@@ -244,14 +353,13 @@ export const login = async (req, res) => {
           name: user.name,
           email: user.email,
           avatar: user.avatar || null,
-          createdAt: user.createdAt
-        }
-      }
+          createdAt: user.createdAt,
+        },
+      },
     );
-
   } catch (error) {
-    console.error('Login error:', error);
-    return ResponseHandler.serverError(res, req.t('auth.login.failed'), error);
+    console.error("Login error:", error);
+    return ResponseHandler.serverError(res, req.t("auth.login.failed"), error);
   }
 };
 
@@ -260,19 +368,25 @@ export const forgotPassword = async (req, res) => {
     const email = normalizeIdentifier(req.body.email);
 
     if (!email) {
-      return ResponseHandler.validationError(res, req.t('auth.forgot.email_required'));
+      return ResponseHandler.validationError(
+        res,
+        req.t("auth.forgot.email_required"),
+      );
     }
 
     const user = await ClientUser.findOne({ email });
 
     if (!user) {
-      return ResponseHandler.notFound(res, req.t('auth.forgot.account_not_found'));
+      return ResponseHandler.notFound(
+        res,
+        req.t("auth.forgot.account_not_found"),
+      );
     }
 
     if (!user.isVerified) {
       return ResponseHandler.forbidden(
         res,
-        req.t('auth.forgot.email_not_verified')
+        req.t("auth.forgot.email_not_verified"),
       );
     }
 
@@ -284,51 +398,64 @@ export const forgotPassword = async (req, res) => {
     try {
       await sendPasswordResetEmail(user.email, code, user.name, req.locale);
     } catch (emailError) {
-      console.error('Email sending failed:', emailError);
-      return ResponseHandler.serverError(res, req.t('auth.forgot.failed'));
+      console.error("Email sending failed:", emailError);
+      return ResponseHandler.serverError(res, req.t("auth.forgot.failed"));
     }
 
     return ResponseHandler.successWithMessage(
       res,
-      req.t('auth.forgot.success')
+      req.t("auth.forgot.success"),
     );
-
   } catch (error) {
-    console.error('Forgot password error:', error);
-    return ResponseHandler.serverError(res, req.t('auth.forgot.failed'), error);
+    console.error("Forgot password error:", error);
+    return ResponseHandler.serverError(res, req.t("auth.forgot.failed"), error);
   }
 };
 
 export const resetPassword = async (req, res) => {
   try {
     const email = normalizeIdentifier(req.body.email);
-    const code = normalizeIdentifier(req.body.code) || normalizeIdentifier(req.body.otp);
+    const code =
+      normalizeIdentifier(req.body.code) || normalizeIdentifier(req.body.otp);
     const password = req.body.password || req.body.newPassword;
-    const confirmPassword = req.body.confirmPassword || req.body.confirmNewPassword;
+    const confirmPassword =
+      req.body.confirmPassword || req.body.confirmNewPassword;
 
     // Validate input
     if (!email || !code || !password) {
-      return ResponseHandler.validationError(res, req.t('auth.reset.missing_fields'));
+      return ResponseHandler.validationError(
+        res,
+        req.t("auth.reset.missing_fields"),
+      );
     }
 
     if (confirmPassword !== undefined && password !== confirmPassword) {
-      return ResponseHandler.validationError(res, req.t('auth.reset.passwords_not_match'));
+      return ResponseHandler.validationError(
+        res,
+        req.t("auth.reset.passwords_not_match"),
+      );
     }
 
     // Validate password length (8 characters minimum)
     if (password.length < 8) {
-      return ResponseHandler.validationError(res, req.t('auth.reset.password_too_short'));
+      return ResponseHandler.validationError(
+        res,
+        req.t("auth.reset.password_too_short"),
+      );
     }
 
     // Find user with valid reset code
     const user = await ClientUser.findOne({
       email,
       passwordResetCode: code,
-      passwordResetExpires: { $gt: Date.now() }
+      passwordResetExpires: { $gt: Date.now() },
     });
 
     if (!user) {
-      return ResponseHandler.validationError(res, req.t('auth.reset.invalid_or_expired'));
+      return ResponseHandler.validationError(
+        res,
+        req.t("auth.reset.invalid_or_expired"),
+      );
     }
 
     // Reset password
@@ -342,24 +469,25 @@ export const resetPassword = async (req, res) => {
 
     return ResponseHandler.successWithMessage(
       res,
-      req.t('auth.reset.success'),
-      { token }
+      req.t("auth.reset.success"),
+      { token },
     );
-
   } catch (error) {
-    console.error('Reset password error:', error);
-    return ResponseHandler.serverError(res, req.t('auth.reset.failed'), error);
+    console.error("Reset password error:", error);
+    return ResponseHandler.serverError(res, req.t("auth.reset.failed"), error);
   }
 };
 
 // Get user profile
 export const getProfile = async (req, res) => {
   try {
-    const user = await ClientUser.findById(req.user._id)
-      .select('-password');
+    const user = await ClientUser.findById(req.user._id).select("-password");
 
     if (!user) {
-      return ResponseHandler.notFound(res, req.t('auth.profile.user_not_found'));
+      return ResponseHandler.notFound(
+        res,
+        req.t("auth.profile.user_not_found"),
+      );
     }
 
     // Return user data without password
@@ -369,14 +497,17 @@ export const getProfile = async (req, res) => {
       name: user.name,
       isVerified: user.isVerified,
       accountStatus: user.accountStatus,
-      createdAt: user.createdAt
+      createdAt: user.createdAt,
     };
 
     return ResponseHandler.success(res, userResponse);
-
   } catch (error) {
-    console.error('Get profile error:', error);
-    return ResponseHandler.serverError(res, req.t('auth.profile.failed'), error);
+    console.error("Get profile error:", error);
+    return ResponseHandler.serverError(
+      res,
+      req.t("auth.profile.failed"),
+      error,
+    );
   }
 };
 
@@ -389,7 +520,7 @@ export const changePassword = async (req, res) => {
     if (!currentPassword || !newPassword || !confirmNewPassword) {
       return ResponseHandler.validationError(
         res,
-        req.t('auth.change_password.missing_fields')
+        req.t("auth.change_password.missing_fields"),
       );
     }
 
@@ -397,7 +528,7 @@ export const changePassword = async (req, res) => {
     if (newPassword.length < 8) {
       return ResponseHandler.validationError(
         res,
-        req.t('auth.change_password.too_short')
+        req.t("auth.change_password.too_short"),
       );
     }
 
@@ -405,21 +536,28 @@ export const changePassword = async (req, res) => {
     if (newPassword !== confirmNewPassword) {
       return ResponseHandler.validationError(
         res,
-        req.t('auth.change_password.not_match')
+        req.t("auth.change_password.not_match"),
       );
     }
 
     // Get user with password field
-    const user = await ClientUser.findById(req.user._id).select('+password');
+    const user = await ClientUser.findById(req.user._id).select("+password");
 
     if (!user) {
-      return ResponseHandler.notFound(res, req.t('auth.profile.user_not_found'));
+      return ResponseHandler.notFound(
+        res,
+        req.t("auth.profile.user_not_found"),
+      );
     }
 
     // Verify current password is correct
-    const isCurrentPasswordCorrect = await user.comparePassword(currentPassword);
+    const isCurrentPasswordCorrect =
+      await user.comparePassword(currentPassword);
     if (!isCurrentPasswordCorrect) {
-      return ResponseHandler.unauthorized(res, req.t('auth.change_password.current_incorrect'));
+      return ResponseHandler.unauthorized(
+        res,
+        req.t("auth.change_password.current_incorrect"),
+      );
     }
 
     // Validate new password is different from current password
@@ -427,7 +565,7 @@ export const changePassword = async (req, res) => {
     if (isSameAsOldPassword) {
       return ResponseHandler.validationError(
         res,
-        req.t('auth.change_password.same_as_old')
+        req.t("auth.change_password.same_as_old"),
       );
     }
 
@@ -437,11 +575,14 @@ export const changePassword = async (req, res) => {
 
     return ResponseHandler.successWithMessage(
       res,
-      req.t('auth.change_password.success')
+      req.t("auth.change_password.success"),
     );
-
   } catch (error) {
-    console.error('Change password error:', error);
-    return ResponseHandler.serverError(res, req.t('auth.change_password.failed'), error);
+    console.error("Change password error:", error);
+    return ResponseHandler.serverError(
+      res,
+      req.t("auth.change_password.failed"),
+      error,
+    );
   }
 };

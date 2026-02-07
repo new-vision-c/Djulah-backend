@@ -6,7 +6,7 @@ import nodemailer from "nodemailer";
 const createGmailTransporter = () => {
   if (process.env.EMAIL_USER && process.env.EMAIL_PASSWORD) {
     console.log("📧 Configuration Gmail SMTP avec les identifiants fournis");
-    return nodemailer.createTransporter({
+    return nodemailer.createTransport({
       service: "gmail",
       auth: {
         user: process.env.EMAIL_USER,
@@ -137,27 +137,38 @@ const sendEmail = async (options) => {
 };
 
 const normalizeLocale = (locale) => {
-  if (!locale || typeof locale !== 'string') return 'en';
+  if (!locale || typeof locale !== "string") return "en";
   const l = locale.toLowerCase();
-  if (l.startsWith('fr')) return 'fr';
-  if (l.startsWith('en')) return 'en';
-  return 'en';
+  if (l.startsWith("fr")) return "fr";
+  if (l.startsWith("en")) return "en";
+  return "en";
 };
 
-export const sendVerificationEmail = async (email, code, name = '', locale = 'en') => {
+export const sendVerificationEmail = async (
+  email,
+  code,
+  name = "",
+  locale = "en",
+) => {
   const l = normalizeLocale(locale);
-  const safeName = (name && typeof name === 'string' && name.trim().length)
-    ? name.trim()
-    : (l === 'fr' ? 'là' : 'there');
+  const safeName =
+    name && typeof name === "string" && name.trim().length
+      ? name.trim()
+      : l === "fr"
+        ? "là"
+        : "there";
 
-  const subject = l === 'fr'
-    ? 'Djulah - Code de vérification'
-    : 'Djulah - Verification Code';
+  const subject =
+    l === "fr" ? "Djulah - Code de vérification" : "Djulah - Verification Code";
 
-  const title = l === 'fr' ? 'Bienvenue sur Djulah !' : 'Welcome to Djulah!';
-  const greeting = l === 'fr' ? `Bonjour ${safeName} !` : `Hello ${safeName}!`;
-  const codeLabel = l === 'fr' ? 'Votre code de vérification est :' : 'Your verification code is:';
-  const expiry = l === 'fr' ? 'Expire dans 10 minutes' : 'Expires in 10 minutes';
+  const title = l === "fr" ? "Bienvenue sur Djulah !" : "Welcome to Djulah!";
+  const greeting = l === "fr" ? `Bonjour ${safeName} !` : `Hello ${safeName}!`;
+  const codeLabel =
+    l === "fr"
+      ? "Votre code de vérification est :"
+      : "Your verification code is:";
+  const expiry =
+    l === "fr" ? "Expire dans 10 minutes" : "Expires in 10 minutes";
 
   const html = `
     <div style="max-width: 600px; margin: 30px auto; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 15px 40px rgba(0,0,0,0.15); font-family: Arial, sans-serif;">
@@ -181,20 +192,34 @@ export const sendVerificationEmail = async (email, code, name = '', locale = 'en
   return await sendEmail({ to: email, subject, html });
 };
 
-export const sendPasswordResetEmail = async (email, code, name = '', locale = 'en') => {
+export const sendPasswordResetEmail = async (
+  email,
+  code,
+  name = "",
+  locale = "en",
+) => {
   const l = normalizeLocale(locale);
-  const safeName = (name && typeof name === 'string' && name.trim().length)
-    ? name.trim()
-    : (l === 'fr' ? 'là' : 'there');
+  const safeName =
+    name && typeof name === "string" && name.trim().length
+      ? name.trim()
+      : l === "fr"
+        ? "là"
+        : "there";
 
-  const subject = l === 'fr'
-    ? 'Djulah - Code de réinitialisation du mot de passe'
-    : 'Djulah - Password Reset Code';
+  const subject =
+    l === "fr"
+      ? "Djulah - Code de réinitialisation du mot de passe"
+      : "Djulah - Password Reset Code";
 
-  const title = l === 'fr' ? 'Réinitialisation du mot de passe' : 'Password Reset';
-  const greeting = l === 'fr' ? `Bonjour ${safeName} !` : `Hello ${safeName}!`;
-  const codeLabel = l === 'fr' ? 'Votre code de réinitialisation est :' : 'Your password reset code:';
-  const expiry = l === 'fr' ? 'Valable uniquement 10 minutes' : 'Valid for 10 minutes only';
+  const title =
+    l === "fr" ? "Réinitialisation du mot de passe" : "Password Reset";
+  const greeting = l === "fr" ? `Bonjour ${safeName} !` : `Hello ${safeName}!`;
+  const codeLabel =
+    l === "fr"
+      ? "Votre code de réinitialisation est :"
+      : "Your password reset code:";
+  const expiry =
+    l === "fr" ? "Valable uniquement 10 minutes" : "Valid for 10 minutes only";
 
   const html = `
     <div style="max-width: 600px; margin: 30px auto; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 15px 40px rgba(0,0,0,0.15); font-family: Arial, sans-serif;">
