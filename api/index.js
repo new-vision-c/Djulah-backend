@@ -43,7 +43,7 @@ app.use(
 
 app.use(
   cors({
-    origin: config.cors.allowedOrigins,
+    origin: "*", // Autorise toutes les origines pour le test
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
