@@ -5,7 +5,7 @@ import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import mongoose from "mongoose";
 import { dirname } from "path";
-import { fileURLToPath } from "url";
+import fileURLToPath from "url";
 
 // Résoudre les chemins correctement
 const __filename = fileURLToPath(import.meta.url);
@@ -40,9 +40,6 @@ app.use(
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
-
-// Ajout du middleware de traduction
-app.use(localeMiddleware);
 
 // Rate limiting
 const limiter = rateLimit({
@@ -124,10 +121,13 @@ app.get("/api", (req, res) => {
   res.json({
     message: "Djulah API - Production",
     version: "1.0.0",
-    endpoints: ["/api/health", "/api/auth"],
+    endpoints: ["/api/health", "/api/auth", "/api-docs"],
     status: "operational",
   });
 });
+
+// Swagger Documentation
+swaggerDocs(app);
 
 // 404 handler
 app.use((req, res) => {

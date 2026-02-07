@@ -43,20 +43,9 @@ app.use(
 // CORS CONFIGURATION - Development & Production friendly
 const corsOptions = {
   origin: function (origin, callback) {
-    if (!origin) return callback(null, true);
-
-    if (config.cors.allowAllInDev) {
-      console.log(`✅ CORS allowed (dev mode): ${origin}`);
-      return callback(null, true);
-    }
-
-    if (config.cors.allowedOrigins.indexOf(origin) !== -1) {
-      console.log(`✅ CORS allowed (whitelisted): ${origin}`);
-      callback(null, true);
-    } else {
-      console.warn(`⚠️  CORS rejected origin: ${origin}`);
-      callback(new Error("Not allowed by CORS"));
-    }
+    // Autoriser toutes les origines
+    console.log(`✅ CORS allowed: ${origin || "no-origin"}`);
+    return callback(null, true);
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
@@ -84,7 +73,9 @@ const limiter = rateLimit({
   max: 100,
   message: (req) => ({
     success: false,
-    message: req.t ? req.t('auth.rate_limit') : 'Too many requests from this IP'
+    message: req.t
+      ? req.t("auth.rate_limit")
+      : "Too many requests from this IP",
   }),
   standardHeaders: true,
   legacyHeaders: false,
@@ -124,9 +115,9 @@ const testCloudinary = async () => {
 testCloudinary();
 
 // ==================== API ROUTES ====================
-app.use('/api/auth', authRoutes);
+app.use("/api/auth", authRoutes);
 // Alias for Flutter client app (/api/auth/client/*)
-app.use('/api/auth/client', authRoutes);
+app.use("/api/auth/client", authRoutes);
 
 // ==================== HEALTH & WELCOME ====================
 app.get("/health", (req, res) => {
