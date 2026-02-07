@@ -116,21 +116,5 @@ app.use((err, req, res, next) => {
 
 // Handler Vercel
 export default function handler(req, res) {
-  try {
-    res.status(200).json({
-      status: "OK",
-      service: "Djulah API",
-      timestamp: new Date().toISOString(),
-      version: "1.0.0",
-      message: "Test diagnostic Vercel - sans imports",
-      method: req.method,
-      url: req.url,
-    });
-  } catch (error) {
-    console.error("Handler error:", error);
-    res.status(500).json({
-      status: "ERROR",
-      message: error.message,
-    });
-  }
+  return app(req, res);
 }
