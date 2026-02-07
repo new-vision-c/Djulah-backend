@@ -249,16 +249,39 @@ export const verifyEmail = async (req, res) => {
 
 export const resendVerificationCode = async (req, res) => {
   try {
-    const email = normalizeIdentifier(req.body.email);
+    // Récupérer le sessionToken depuis le header Authorization: Bearer <token>
+    let sessionToken;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith("Bearer")) {
+      sessionToken = authHeader.split(" ")[1];
+    }
 
-    if (!email) {
+    if (!sessionToken) {
       return ResponseHandler.validationError(
         res,
-        req.t("auth.resend.email_required"),
+        req.t("auth.resend.token_required"),
       );
     }
 
-    const user = await ClientUser.findOne({ email });
+    // Vérifier et décoder le sessionToken JWT (aligné Prisma)
+    let decoded;
+    try {
+      decoded = jwt.verify(sessionToken, config.jwt.secret);
+      if (decoded.type !== "session" || decoded.step !== "registration") {
+        return ResponseHandler.validationError(
+          res,
+          req.t("auth.resend.invalid_session"),
+        );
+      }
+    } catch (tokenError) {
+      return ResponseHandler.validationError(
+        res,
+        req.t("auth.resend.session_expired"),
+      );
+    }
+
+    // Récupérer l'utilisateur depuis le payload du token
+    const user = await ClientUser.findById(decoded.id);
 
     if (!user) {
       return ResponseHandler.notFound(res, req.t("auth.resend.user_not_found"));
@@ -271,32 +294,42 @@ export const resendVerificationCode = async (req, res) => {
       );
     }
 
-    // Rate limiting - 5 minute between resends
-    if (
-      user.verificationCodeResentAt &&
-      Date.now() - user.verificationCodeResentAt < 60000 * 5
-    ) {
-      return ResponseHandler.tooManyRequests(
-        res,
-        req.t("auth.resend.too_many_requests"),
-      );
+    // Rate limiting - 15 minutes entre les envois si 3 tentatives ou plus (aligné Prisma)
+    if (user.failedVerificationAttempts >= 3) {
+      const timeSinceLastOtp =
+        Date.now() - (user.otpSentAt || user.createdAt).getTime();
+      const waitTime = 15 * 60 * 1000; // 15 minutes
+
+      if (timeSinceLastOtp < waitTime) {
+        const remainingTime = Math.ceil((waitTime - timeSinceLastOtp) / 60000);
+        return ResponseHandler.tooManyRequests(
+          res,
+          req.t("auth.resend.too_many_requests") + ` (${remainingTime} min)`,
+        );
+      }
     }
 
     // Generate new code
     const code = user.generateVerificationCode();
     await user.save({ validateBeforeSave: false });
 
-    // Send email
+    // Send email (optionnel en dev)
     try {
-      await sendVerificationEmail(email, code, user.name);
+      await sendVerificationEmail(user.email, code, user.name);
     } catch (emailError) {
-      console.error("Email sending failed:", emailError);
-      return ResponseHandler.serverError(res, req.t("auth.resend.failed"));
+      console.warn("Email non envoyé (mode dev?):", emailError);
+      // Ne pas bloquer le flow
     }
 
+    // Réponse alignée sur Prisma
     return ResponseHandler.successWithMessage(
       res,
       req.t("auth.resend.success"),
+      {
+        otpSent: true,
+        email: user.email,
+        otpCode: process.env.NODE_ENV !== "production" ? code : undefined,
+      },
     );
   } catch (error) {
     console.error("Resend verification code error:", error);
@@ -390,21 +423,50 @@ export const forgotPassword = async (req, res) => {
       );
     }
 
-    // Generate reset code
+    // Rate limiting via otpAttempts (aligné Prisma)
+    if (user.failedVerificationAttempts >= 3) {
+      const timeSinceLastOtp =
+        Date.now() - (user.otpSentAt || user.createdAt).getTime();
+      const waitTime = 15 * 60 * 1000; // 15 minutes
+
+      if (timeSinceLastOtp < waitTime) {
+        const remainingTime = Math.ceil((waitTime - timeSinceLastOtp) / 60000);
+        return ResponseHandler.tooManyRequests(
+          res,
+          req.t("auth.forgot.too_many_requests") + ` (${remainingTime} min)`,
+        );
+      }
+    }
+
+    // Générer un sessionToken JWT pour la réinitialisation (24h) (aligné Prisma)
+    const sessionToken = generateToken(user._id, {
+      step: "password_reset",
+      type: "session",
+      expiresIn: "24h",
+    });
+
+    // Générer un OTP de reset
     const code = user.generatePasswordResetCode();
     await user.save({ validateBeforeSave: false });
 
-    // Send email
+    // Send email (optionnel en dev)
     try {
       await sendPasswordResetEmail(user.email, code, user.name, req.locale);
     } catch (emailError) {
-      console.error("Email sending failed:", emailError);
-      return ResponseHandler.serverError(res, req.t("auth.forgot.failed"));
+      console.warn("Email non envoyé (mode dev?):", emailError);
+      // Ne pas bloquer le flow
     }
 
+    // Réponse alignée sur Prisma
     return ResponseHandler.successWithMessage(
       res,
       req.t("auth.forgot.success"),
+      {
+        sessionToken,
+        requiresOtp: true,
+        otpCode: process.env.NODE_ENV !== "production" ? code : undefined,
+        email,
+      },
     );
   } catch (error) {
     console.error("Forgot password error:", error);
@@ -414,15 +476,48 @@ export const forgotPassword = async (req, res) => {
 
 export const resetPassword = async (req, res) => {
   try {
-    const email = normalizeIdentifier(req.body.email);
     const code =
       normalizeIdentifier(req.body.code) || normalizeIdentifier(req.body.otp);
     const password = req.body.password || req.body.newPassword;
     const confirmPassword =
       req.body.confirmPassword || req.body.confirmNewPassword;
 
+    // Récupérer le sessionToken depuis le header Authorization: Bearer <token>
+    let sessionToken;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith("Bearer")) {
+      sessionToken = authHeader.split(" ")[1];
+    }
+
+    if (!sessionToken) {
+      return ResponseHandler.validationError(
+        res,
+        req.t("auth.reset.token_required"),
+      );
+    }
+
+    // Vérifier et décoder le sessionToken JWT (aligné Prisma)
+    let decoded;
+    try {
+      decoded = jwt.verify(sessionToken, config.jwt.secret);
+      if (decoded.type !== "session" || decoded.step !== "password_reset") {
+        return ResponseHandler.validationError(
+          res,
+          req.t("auth.reset.invalid_session"),
+        );
+      }
+    } catch (tokenError) {
+      return ResponseHandler.validationError(
+        res,
+        req.t("auth.reset.session_expired"),
+      );
+    }
+
+    // Récupérer l'email depuis le payload du token
+    const email = decoded.email;
+
     // Validate input
-    if (!email || !code || !password) {
+    if (!code || !password) {
       return ResponseHandler.validationError(
         res,
         req.t("auth.reset.missing_fields"),
