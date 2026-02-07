@@ -14,7 +14,7 @@ const __dirname = dirname(__filename);
 // Charger les variables d'environnement
 dotenv.config({ path: "./.env" });
 
-// Import des routes d'authentification
+// Import des middlewares et routes
 import authRoutes from "../routes/authRoutes.js";
 
 // Version avec imports progressifs
@@ -40,6 +40,9 @@ app.use(
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+// Ajout du middleware de traduction
+app.use(localeMiddleware);
 
 // Rate limiting
 const limiter = rateLimit({
