@@ -18,8 +18,20 @@
       "destination": "https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.11.0/swagger-ui-standalone-preset.min.js"
     },
     {
-      "source": "/(.*)",
-      "destination": "/backend/server.js"
+      "source": "/api-docs",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/api-docs.json",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/health",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/index.js"
     }
   ],
   "headers": [
