@@ -11,6 +11,10 @@ import {
   resetPassword,
   verifyEmail,
 } from "../controllers/authController.js";
+import {
+  updateAvatar,
+  updateProfile,
+} from "../controllers/updateController.js";
 import { protect } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();

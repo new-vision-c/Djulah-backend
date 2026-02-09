@@ -326,7 +326,6 @@ export const resendVerificationCode = async (req, res) => {
       res,
       req.t("auth.resend.success"),
       {
-        otpSent: true,
         email: user.email,
         otpCode: process.env.NODE_ENV !== "production" ? code : undefined,
       },
@@ -381,6 +380,7 @@ export const login = async (req, res) => {
       req.t("auth.login.success"),
       {
         token,
+        refreshToken: token, // TODO: implémenter vrai refreshToken si nécessaire
         user: {
           id: user._id,
           name: user.name,
@@ -457,16 +457,10 @@ export const forgotPassword = async (req, res) => {
       // Ne pas bloquer le flow
     }
 
-    // Réponse alignée sur Prisma
+    // Réponse alignée sur Prisma (le front n’attend que message)
     return ResponseHandler.successWithMessage(
       res,
       req.t("auth.forgot.success"),
-      {
-        sessionToken,
-        requiresOtp: true,
-        otpCode: process.env.NODE_ENV !== "production" ? code : undefined,
-        email,
-      },
     );
   } catch (error) {
     console.error("Forgot password error:", error);

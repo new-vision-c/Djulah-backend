@@ -130,10 +130,13 @@ export const updateAvatar = async (req, res) => {
       res,
       "Avatar updated successfully",
       {
-        id: updatedUser._id,
-        fullname: updatedUser.name,
-        email: updatedUser.email,
-        avatar: updatedUser.avatar,
+        user: {
+          id: updatedUser._id,
+          fullname: updatedUser.name,
+          email: updatedUser.email,
+          avatar: updatedUser.avatar,
+        },
+        avatarUrl: updatedUser.avatar,
       },
     );
   } catch (error) {
